@@ -1,15 +1,114 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// Prismaスキーマファイル
+// 詳細はドキュメントを参照: https://pris.ly/d/prisma-schema
 
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
+// Prismaクライアントの生成設定
 generator client {
-  provider = "prisma-client-js"
-  output   = "../src/generated/prisma"
+  provider = "prisma-client-js" // TypeScript/JavaScript用クライアント
+  output   = "../src/generated/prisma" // 生成先ディレクトリ
 }
 
+// データベース接続設定
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider = "postgresql" // PostgreSQLを使用
+  url      = env("DATABASE_URL") // 環境変数からDB接続URLを取得
+}
+
+// Auth.js認証システム必須モデル群
+// @auth/prisma-adapterで必要とされるモデル定義
+
+// 外部プロバイダーアカウント情報（Google、GitHub等）
+model Account {
+  id                String  @id @default(cuid()) // 一意識別子
+  userId            String  @map("user_id") // 関連するユーザーID
+  type              String // アカウントタイプ（oauth等）
+  provider          String // プロバイダー名（google、github等）
+  providerAccountId String  @map("provider_account_id") // プロバイダー側のアカウントID
+  refresh_token     String? @db.Text // リフレッシュトークン
+  access_token      String? @db.Text // アクセストークン
+  expires_at        Int? // トークン有効期限（Unix時間）
+  token_type        String? // トークンタイプ（Bearer等）
+  scope             String? // 認可スコープ
+  id_token          String? @db.Text // IDトークン（OpenID Connect）
+  session_state     String? // セッション状態
+
+  // ユーザーとの関連付け（ユーザー削除時にカスケード削除）
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // プロバイダーとアカウントIDの組み合わせで一意制約
+  @@unique([provider, providerAccountId])
+  @@map("accounts") // テーブル名をaccountsにマッピング
+}
+
+// ユーザーセッション情報
+model Session {
+  id           String   @id @default(cuid()) // セッション一意識別子
+  sessionToken String   @unique @map("session_token") // セッショントークン（一意）
+  userId       String   @map("user_id") // 関連するユーザーID
+  expires      DateTime // セッション有効期限
+
+  // ユーザーとの関連付け（ユーザー削除時にカスケード削除）
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions") // テーブル名をsessionsにマッピング
+}
+
+// ユーザー情報
+model User {
+  id            String    @id @default(cuid()) // ユーザー一意識別子
+  name          String? // 表示名（任意）
+  email         String?   @unique // メールアドレス（一意、任意）
+  emailVerified DateTime? @map("email_verified") // メール認証日時
+  image         String? // プロフィール画像URL
+
+  // アプリケーション固有フィールド
+  role          String    @default("user") // ユーザー権限（"user" | "admin"）
+  createdAt     DateTime  @default(now()) @map("created_at") // アカウント作成日時
+  updatedAt     DateTime  @updatedAt @map("updated_at") // 最終更新日時
+
+  // リレーション定義
+  accounts Account[] // 関連する外部アカウント
+  sessions Session[] // 関連するセッション
+  posts    Post[] // 作成した投稿
+
+  @@map("users") // テーブル名をusersにマッピング
+}
+
+// メール認証トークン
+model VerificationToken {
+  identifier String // 識別子（通常はメールアドレス）
+  token      String // 認証トークン
+  expires    DateTime // トークン有効期限
+
+  // 識別子とトークンの組み合わせで一意制約
+  @@unique([identifier, token])
+  @@map("verification_tokens") // テーブル名をverification_tokensにマッピング
+}
+
+// アプリケーション固有モデル群
+// ひだまりSNSアプリケーション専用のモデル定義
+
+// 投稿情報
+model Post {
+  id              String   @id @default(cuid()) // 投稿一意識別子
+  content         String   @db.Text // 投稿内容（長文対応）
+  positivityScore Float    @map("positivity_score") // ポジティビティスコア（AI分析結果）
+
+  // Gemini AI分析関連メタデータ
+  analysisReason  String?  @map("analysis_reason") @db.Text // 分析理由・詳細
+  wasModerated    Boolean  @default(false) @map("was_moderated") // モデレーション実施フラグ
+
+  // 投稿者との関連付け
+  authorId        String   @map("author_id") // 投稿者ユーザーID
+  author          User     @relation(fields: [authorId], references: [id], onDelete: Cascade) // 投稿者（ユーザー削除時にカスケード削除）
+
+  // タイムスタンプ
+  createdAt       DateTime @default(now()) @map("created_at") // 投稿作成日時
+  updatedAt       DateTime @updatedAt @map("updated_at") // 最終更新日時
+
+  // パフォーマンス向上のためのインデックス
+  @@index([authorId]) // 投稿者別検索用
+  @@index([createdAt]) // 時系列ソート用
+  @@index([positivityScore]) // スコア別検索・ソート用
+
+  @@map("posts") // テーブル名をpostsにマッピング
 }
