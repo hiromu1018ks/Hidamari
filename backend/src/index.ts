@@ -1,10 +1,9 @@
-// テスト用の簡単なコード
-const message = "Hello, Backend!";
+import express from "express";
 
-function greet(name: string): string {
-  return `${message} Welcome, ${name}!`;
-}
+const app = express();
 
-console.log(greet("World"));
+app.get("/hello", (req, res) => {
+  res.send("Hello World!");
+});
 
-export { greet };
+app.listen(8080);
