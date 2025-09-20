@@ -1,0 +1,15 @@
+services:
+  # PostgreSQL データベース
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: hidamari_db
+      POSTGRES_USER: hidamari_user
+      POSTGRES_PASSWORD: hidamari_password
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
