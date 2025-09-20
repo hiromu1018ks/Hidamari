@@ -16,7 +16,7 @@ Hidamari is a positive SNS application that uses Google's Gemini AI to analyze p
 - **Backend**: Express.js + TypeScript + Prisma ORM
 - **Database**: PostgreSQL (Docker)
 - **AI**: Google Gemini API for positivity analysis
-- **Authentication**: JWT (not Auth.js as originally planned)
+- **Authentication**: Auth.js with Google & GitHub OAuth
 
 ## Common Development Commands
 
@@ -64,18 +64,18 @@ PostgreSQL (Docker) :5432
 - `POST /api/posts/analyze` - Gemini positivity analysis
 - `POST /api/posts` - Create approved posts
 - `GET /api/posts` - Paginated post feed
-- `POST /api/auth/login` - JWT authentication
-- `POST /api/auth/register` - User registration
+- `/api/auth/*` - Auth.js OAuth endpoints (signin, signout, callback)
+- `GET /api/auth/session` - Get current session
 
 ### Core Components (Frontend - React + Vite)
 - **PostForm** - Input with real-time analysis (shadcn/ui Textarea + Button)
 - **PostFeed** - Infinite scroll post list (shadcn/ui Card)
 - **PositivityIndicator** - Score display (shadcn/ui Progress + Badge)
-- **AuthProvider** - JWT token management
+- **AuthProvider** - Auth.js session management
 
 ### Services (Backend)
 - **GeminiService** - AI analysis and suggestions
-- **AuthService** - JWT generation/verification
+- **AuthService** - Auth.js session validation
 - **PostService** - Database operations
 
 ## Data Models
@@ -103,7 +103,11 @@ interface Post {
 ```bash
 # Backend (.env)
 DATABASE_URL="postgresql://postgres:password@localhost:5432/positive_sns"
-JWT_SECRET="your-jwt-secret"
+AUTH_SECRET="your-auth-secret"
+GOOGLE_CLIENT_ID="your-google-client-id"
+GOOGLE_CLIENT_SECRET="your-google-client-secret"
+GITHUB_CLIENT_ID="your-github-client-id"
+GITHUB_CLIENT_SECRET="your-github-client-secret"
 GEMINI_API_KEY="your-gemini-key"
 
 # Frontend (.env)
@@ -165,5 +169,5 @@ cd backend && npm run test:integration # Integration tests only
 - **Character Limit**: 1000 characters per post
 - **API Timeout**: 10 seconds for Gemini API calls
 - **Debouncing**: 500ms for real-time analysis
-- **Security**: JWT tokens, input validation with Zod
+- **Security**: OAuth authentication, input validation with Zod
 - **Testing Target**: 80%+ coverage

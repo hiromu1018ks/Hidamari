@@ -1,5 +1,6 @@
-import "dotenv/config";
-import rateLimit from "express-rate-limit";
+import rateLimit from 'express-rate-limit';
+
+import 'dotenv/config';
 
 // レート制限の時間窓を設定（デフォルト: 15分）
 const windowMs: number =
@@ -13,12 +14,23 @@ const rateLimiter = rateLimit({
   windowMs, // 時間窓（ミリ秒）
   max, // 最大リクエスト数
   // 制限に達した際のエラーメッセージ
-  message: {
-    error: "Too many requests",
-    message: "リクエストが多すぎます。15分後に再度お試しください。",
-  },
   standardHeaders: true, // 標準的なレート制限ヘッダーを送信
   legacyHeaders: false, // 古いレート制限ヘッダーは無効化
+  skip: (req) => {
+    // 開発環境では認証ルートのレート制限をスキップ
+    if (
+      process.env.NODE_ENV === 'development' &&
+      req.path.startsWith('/auth')
+    ) {
+      return true;
+    }
+
+    return false;
+  },
+  message: {
+    error: 'Too many requests',
+    message: 'リクエストが多すぎます。15分後に再度お試しください。',
+  },
 });
 
 export default rateLimiter;

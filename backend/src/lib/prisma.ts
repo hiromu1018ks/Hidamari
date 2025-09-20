@@ -2,8 +2,15 @@
 
 import { PrismaClient } from '../generated/prisma/index.js';
 
-const globalForPrisma = global as unknown as { prisma: PrismaClient };
+// PrismaClientの型拡張
+declare global {
+  var prisma: PrismaClient | undefined;
+}
 
-export const prisma = globalForPrisma.prisma || new PrismaClient();
+export const prisma =
+  globalThis.prisma ??
+  new PrismaClient({
+    log: ['query'],
+  });
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+if (process.env.NODE_ENV !== 'production') globalThis.prisma = prisma;
