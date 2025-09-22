@@ -1,4 +1,4 @@
-import { ExpressAuth } from '@auth/express';
+import { ExpressAuth, ExpressAuthConfig } from '@auth/express';
 import Github from '@auth/express/providers/github';
 import Google from '@auth/express/providers/google';
 import { PrismaAdapter } from '@auth/prisma-adapter';
@@ -6,7 +6,7 @@ import { prisma } from './prisma.ts';
 
 import 'dotenv/config';
 
-export const expressAuth = ExpressAuth({
+export const authConfig = {
   adapter: PrismaAdapter(prisma),
   providers: [
     Google({
@@ -21,11 +21,9 @@ export const expressAuth = ExpressAuth({
   secret: process.env.AUTH_SECRET,
   trustHost: true,
   session: {
-    strategy: 'database',
+    strategy: 'database', // ← string ではなく文字列リテラルとして保持される
     maxAge: 30 * 24 * 60 * 60,
   },
-  // pages: {
-  //   signIn: `${process.env.FRONTEND_URL}/auth/signin`,
-  //   error: `${process.env.FRONTEND_URL}/auth/error`,
-  // },
-});
+} satisfies ExpressAuthConfig;
+
+export const expressAuth = ExpressAuth(authConfig);

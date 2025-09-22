@@ -25,7 +25,7 @@ app.use(rateLimiter); // レート制限
 app.use(setupSecurity.serverLoad); // サーバー負荷監視
 
 // Auth.js のルート設定（Express 5.x 互換性のため修正）
-app.use('/auth', expressAuth);
+app.use('/api/auth', expressAuth);
 
 // テスト用のエンドポイント
 app.get('/hello', (req, res) => {
