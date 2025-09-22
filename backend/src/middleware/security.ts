@@ -1,3 +1,8 @@
+/**
+ * セキュリティ関連ミドルウェアの集約（Helmet/CORS/過負荷制御）。
+ * 推奨適用順: serverLoad → helmet → cors
+ * プロセス終了時は toobusy のリソースを解放すること。
+ */
 import cors from 'cors';
 import { type NextFunction, type Request, type Response } from 'express';
 import helmet, { type HelmetOptions } from 'helmet';
@@ -5,11 +10,12 @@ import toobusy from 'toobusy-js';
 
 import 'dotenv/config';
 
+// process.on('SIGINT', () => toobusy.shutdown()) などで終了時に解放
+
 // ============================================
 // CORS 設定
 // ============================================
-// 許可したいフロントエンドのオリジン一覧をまとめて管理する。
-// 環境変数が未設定の場合はローカル開発用URLのみを許可する。
+// 許可オリジン。未設定時はローカルを許可。
 const allowedOrigins = [
   process.env.FRONTEND_URL,
   process.env.FRONTEND_STAGING_URL,
@@ -19,20 +25,20 @@ const allowedOrigins = [
 ].filter((origin): origin is string => Boolean(origin));
 
 export const corsOptions = {
-  // オリジンが許可リストに含まれているかを実行時にチェックする
+  // 明示リストで検証（ワイルドカード禁止）
   origin: (
     origin: string | undefined,
     callback: (err: Error | null, allow?: boolean) => void,
   ) => {
     if (!origin) {
-      // same-origin やサーバー間通信など Origin ヘッダーが無いケースは許可
+      // same-origin やサーバー間通信（Origin 無し）は許可
       callback(null, true);
 
       return;
     }
 
     if (origin === 'null' && process.env.NODE_ENV !== 'production') {
-      // ブラウザ拡張やローカルファイルなどで Origin ヘッダーが "null" になるケースを開発/検証用に許可
+      // file:/ などで Origin が "null" になる開発用途を許可
       callback(null, true);
 
       return;
@@ -44,12 +50,15 @@ export const corsOptions = {
       return;
     }
 
-    callback(new Error(`Origin ${origin} is not allowed by CORS policy`), false);
+    callback(
+      new Error(`Origin ${origin} is not allowed by CORS policy`),
+      false,
+    );
   },
-  credentials: true, // 認証Cookieを扱うためにクレデンシャル付きリクエストを許可
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // 利用するHTTPメソッドのみを許可
-  allowedHeaders: ['Content-Type', 'Authorization'], // 必要なヘッダーだけを許可
-  optionsSuccessStatus: 204, // プリフライト成功時のレスポンス（ボディ不要の204）
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  optionsSuccessStatus: 204,
 };
 
 // ============================================
@@ -60,11 +69,12 @@ export const serverLoadMiddleware = (
   res: Response,
   next: NextFunction,
 ): void => {
-  // toobusy-js が閾値を超えた場合は高負荷と判定する
+  // イベントループ遅延が閾値超過なら 503 を返して早期遮断
   if (toobusy()) {
     res.status(503).json({
       error: 'Server too busy',
-      message: 'サーバーが混雑しています。しばらく時間をおいてから再度お試しください。',
+      message:
+        'サーバーが混雑しています。しばらく時間をおいてから再度お試しください。',
     });
 
     return;
@@ -74,15 +84,15 @@ export const serverLoadMiddleware = (
 };
 
 // ============================================
-// Helmet（セキュリティヘッダー）設定
+// Helmet（セキュリティヘッダー）
 // ============================================
 const helmetOptions: HelmetOptions = {
-  // COEP を有効化すると Auth.js が配信する一部リソースがブロックされるため無効化
+  // COEP は Auth.js の一部と相性が悪いため無効化
   crossOriginEmbedderPolicy: false,
 };
 
 if (process.env.NODE_ENV === 'development') {
-  // 開発中はCSPを無効化してホットリロード等を容易にする
+  // 開発中は HMR などのため CSP を無効化
   helmetOptions.contentSecurityPolicy = false;
 } else {
   helmetOptions.contentSecurityPolicy = {
@@ -94,14 +104,19 @@ if (process.env.NODE_ENV === 'development') {
       imgSrc: ["'self'", 'data:', 'https://authjs.dev'],
       objectSrc: ["'none'"],
       scriptSrc: ["'self'"],
-      styleSrc: ["'self'", 'https://fonts.googleapis.com', 'https://authjs.dev'],
-      connectSrc: ["'self'", 'https://authjs.dev'],
+      styleSrc: [
+        "'self'",
+        'https://fonts.googleapis.com',
+        'https://authjs.dev',
+      ],
+      connectSrc: ["'self'", 'https://authjs.dev'], // 外部 API を増やしたらここに追加
       formAction: ["'self'", 'https://accounts.google.com'],
     },
   };
 }
 
-// ルート側でセキュリティ関連ミドルウェアをまとめて利用できるようにエクスポート
+// ルート側でまとめて適用できるエイリアス。必要に応じて個別にも使用可。
+// 例: app.use(setupSecurity.serverLoad); app.use(setupSecurity.helmet); app.use(setupSecurity.cors);
 export const setupSecurity = {
   helmet: helmet(helmetOptions),
   cors: cors(corsOptions),

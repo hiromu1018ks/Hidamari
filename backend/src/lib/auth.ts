@@ -1,3 +1,9 @@
+/**
+ * Auth.js 設定と Express ミドルウェア。
+ * - プロバイダ: Google/GitHub（環境変数が必須）
+ * - セッション: DB ストラテジー、30日
+ * - 使い方: app.use('/api/auth', expressAuth)
+ */
 import { ExpressAuth, ExpressAuthConfig } from '@auth/express';
 import Github from '@auth/express/providers/github';
 import Google from '@auth/express/providers/google';
@@ -21,7 +27,7 @@ export const authConfig = {
   secret: process.env.AUTH_SECRET,
   trustHost: true,
   session: {
-    strategy: 'database', // ← string ではなく文字列リテラルとして保持される
+    strategy: 'database',
     maxAge: 30 * 24 * 60 * 60,
   },
 } satisfies ExpressAuthConfig;
