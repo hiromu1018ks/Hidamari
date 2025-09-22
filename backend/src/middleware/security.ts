@@ -1,57 +1,92 @@
 import cors from 'cors';
-import { NextFunction, Request, Response } from 'express';
-import helmet from 'helmet';
-// CORS（Cross-Origin Resource Sharing）設定
-import { type HelmetOptions } from 'helmet';
+import { type NextFunction, type Request, type Response } from 'express';
+import helmet, { type HelmetOptions } from 'helmet';
 import toobusy from 'toobusy-js';
 
 import 'dotenv/config';
 
+// ============================================
+// CORS 設定
+// ============================================
+// 許可したいフロントエンドのオリジン一覧をまとめて管理する。
+// 環境変数が未設定の場合はローカル開発用URLのみを許可する。
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  process.env.FRONTEND_STAGING_URL,
+  process.env.FRONTEND_PREVIEW_URL,
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+].filter((origin): origin is string => Boolean(origin));
+
 export const corsOptions = {
-  origin: [
-    process.env.FRONTEND_URL || 'http://localhost:5173',
-    'http://localhost:3001', // バックエンド自身（Auth.js用）
-    'https://accounts.google.com', // Google OAuth
-    'https://github.com', // GitHub OAuth
-  ], // 許可するオリジン（フロントエンドURL）
-  credentials: true, // Cookieやクレデンシャル情報を含むリクエストを許可
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // 許可するHTTPメソッド
-  allowedHeaders: ['Content-Type', 'Authorization'], // 許可するリクエストヘッダー
-  optionsSuccessStatus: 200, // プリフライトリクエスト成功時のステータスコード
+  // オリジンが許可リストに含まれているかを実行時にチェックする
+  origin: (
+    origin: string | undefined,
+    callback: (err: Error | null, allow?: boolean) => void,
+  ) => {
+    if (!origin) {
+      // same-origin やサーバー間通信など Origin ヘッダーが無いケースは許可
+      callback(null, true);
+
+      return;
+    }
+
+    if (origin === 'null' && process.env.NODE_ENV !== 'production') {
+      // ブラウザ拡張やローカルファイルなどで Origin ヘッダーが "null" になるケースを開発/検証用に許可
+      callback(null, true);
+
+      return;
+    }
+
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+
+      return;
+    }
+
+    callback(new Error(`Origin ${origin} is not allowed by CORS policy`), false);
+  },
+  credentials: true, // 認証Cookieを扱うためにクレデンシャル付きリクエストを許可
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // 利用するHTTPメソッドのみを許可
+  allowedHeaders: ['Content-Type', 'Authorization'], // 必要なヘッダーだけを許可
+  optionsSuccessStatus: 204, // プリフライト成功時のレスポンス（ボディ不要の204）
 };
 
-// サーバー負荷チェックミドルウェア
-// サーバーが高負荷状態の場合にリクエストを拒否する
+// ============================================
+// サーバー負荷監視ミドルウェア
+// ============================================
 export const serverLoadMiddleware = (
   req: Request,
   res: Response,
   next: NextFunction,
 ): void => {
-  // サーバーが忙しい状態かどうかをチェック
+  // toobusy-js が閾値を超えた場合は高負荷と判定する
   if (toobusy()) {
-    // 503 Service Unavailableエラーを返してリクエストを拒否
     res.status(503).json({
       error: 'Server too busy',
-      message:
-        'サーバーが混雑しています。しばらく時間をおいてから再度お試しください。',
+      message: 'サーバーが混雑しています。しばらく時間をおいてから再度お試しください。',
     });
 
     return;
   }
-  // サーバーが正常な場合は次のミドルウェアへ
+
   next();
 };
 
-// セキュリティ関連のミドルウェアをまとめて設定
+// ============================================
+// Helmet（セキュリティヘッダー）設定
+// ============================================
 const helmetOptions: HelmetOptions = {
+  // COEP を有効化すると Auth.js が配信する一部リソースがブロックされるため無効化
   crossOriginEmbedderPolicy: false,
-  crossOriginResourcePolicy: { policy: 'cross-origin' },
 };
 
 if (process.env.NODE_ENV === 'development') {
+  // 開発中はCSPを無効化してホットリロード等を容易にする
   helmetOptions.contentSecurityPolicy = false;
 } else {
   helmetOptions.contentSecurityPolicy = {
+    useDefaults: false,
     directives: {
       defaultSrc: ["'self'"],
       baseUri: ["'self'"],
@@ -59,15 +94,16 @@ if (process.env.NODE_ENV === 'development') {
       imgSrc: ["'self'", 'data:', 'https://authjs.dev'],
       objectSrc: ["'none'"],
       scriptSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      connectSrc: ["'self'"],
+      styleSrc: ["'self'", 'https://fonts.googleapis.com', 'https://authjs.dev'],
+      connectSrc: ["'self'", 'https://authjs.dev'],
       formAction: ["'self'", 'https://accounts.google.com'],
     },
   };
 }
 
+// ルート側でセキュリティ関連ミドルウェアをまとめて利用できるようにエクスポート
 export const setupSecurity = {
   helmet: helmet(helmetOptions),
-  cors: cors(corsOptions), // CORS設定を適用
-  serverLoad: serverLoadMiddleware, // サーバー負荷監視
+  cors: cors(corsOptions),
+  serverLoad: serverLoadMiddleware,
 };
