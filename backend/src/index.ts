@@ -6,8 +6,10 @@
  */
 import express from 'express';
 import { expressAuth } from './lib/auth.ts';
+import { authSession } from './middleware/authSession.ts';
 import rateLimiter from './middleware/rateLimit.ts';
 import { setupSecurity } from './middleware/security.ts';
+import { authRouter } from './routes/auth.ts';
 
 import 'dotenv/config';
 
@@ -29,7 +31,9 @@ app.use(rateLimiter); // レート制限
 app.use(setupSecurity.serverLoad); // サーバー負荷監視
 
 // Auth.js ルート
+app.use(authSession);
 app.use('/api/auth', expressAuth);
+app.use('/api/user', authRouter);
 
 // 動作確認用エンドポイント
 app.get('/hello', (req, res) => {
@@ -39,18 +43,17 @@ app.get('/hello', (req, res) => {
     environment: process.env.NODE_ENV || 'development',
   });
 });
-
-// Auth.js 状態確認用
+// 状態確認用（表示する既定パスを /api/auth/* に合わせる）
 app.get('/auth-status', (req, res) => {
   res.json({
     message: 'Auth.js is configured',
     providers: ['Google', 'GitHub'],
     endpoints: {
-      signin: '/auth/signin',
-      signout: '/auth/signout',
-      session: '/auth/session',
-      providers: '/auth/providers',
-      csrf: '/auth/csrf',
+      signin: '/api/auth/signin',
+      signout: '/api/auth/signout',
+      session: '/api/auth/session',
+      providers: '/api/auth/providers',
+      csrf: '/api/auth/csrf',
     },
     timestamp: new Date().toISOString(),
   });
