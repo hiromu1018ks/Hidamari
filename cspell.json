@@ -1,5 +1,13 @@
 {
   "version": "0.2",
   "language": "en",
-  "words": ["Hidamari", "hidamari", "toobusy", "cuid", "uniquelocal"]
+  "words": [
+    "Hidamari",
+    "hidamari",
+    "toobusy",
+    "cuid",
+    "uniquelocal",
+    "genai",
+    "retryable"
+  ]
 }
